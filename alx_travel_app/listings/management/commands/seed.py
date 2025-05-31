@@ -1,115 +1,47 @@
-from django.core.management.base import BaseCommand
-from django.contrib.auth import get_user_model
-from listings.models import Listing, Booking, Review
-from datetime import date, timedelta
-from decimal import Decimal
 import random
-
-User = get_user_model()
+from django.core.management.base import BaseCommand
+from listings.models import Listing, Booking, Review
+from django.utils import timezone
+from datetime import timedelta
 
 class Command(BaseCommand):
-    help = 'Populate the database with sample listings, users, bookings, and reviews.'
+    help = 'Seed the database with sample listings, bookings, and reviews'
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.WARNING("Seeding database..."))
-        self.clear_data()
-        users = self.create_users()
-        listings = self.create_listings()
-        self.create_bookings(users, listings)
-        self.create_reviews(users, listings)
-        self.final_summary()
-
-    def clear_data(self):
-        self.stdout.write("Clearing old data...")
-        Review.objects.all().delete()
+        self.stdout.write('Deleting old data...')
         Booking.objects.all().delete()
+        Review.objects.all().delete()
         Listing.objects.all().delete()
-        User.objects.filter(is_superuser=False).delete()
 
-    def create_users(self):
-        self.stdout.write("Creating users...")
-        user_data = [
-            ("alex_taylor", "Alex", "Taylor", "alex.taylor@example.com"),
-            ("maria_lee", "Maria", "Lee", "maria.lee@example.com"),
-            ("dylan_wong", "Dylan", "Wong", "dylan.wong@example.com"),
-            ("sophia_kim", "Sophia", "Kim", "sophia.kim@example.com"),
-        ]
-        users = [
-            User(
-                username=u, email=e, first_name=f, last_name=l
-            ) for u, f, l, e in user_data
-        ]
-        for user in users:
-            user.set_password("password123")
-        User.objects.bulk_create(users)
-        self.stdout.write(f"Created {len(users)} users")
-        return list(User.objects.filter(is_superuser=False))
-
-    def create_listings(self):
-        self.stdout.write("Creating listings...")
-        listings_data = [
-            ("Sunny Beach Bungalow", "A bright and cozy bungalow right on the sandy shores.", 180),
-            ("Downtown Modern Flat", "Sleek apartment with city views and fast wifi.", 130),
-            ("Rustic Mountain Lodge", "Cabin surrounded by forest, perfect for hiking enthusiasts.", 150),
-            ("Urban Studio", "Compact and stylish studio, perfect for solo travelers.", 90),
-            ("Country Villa", "Spacious villa with large garden and countryside views.", 220),
-        ]
+        self.stdout.write('Creating listings...')
         listings = []
-        for title, description, price in listings_data:
-            start_date = date.today() + timedelta(days=random.randint(1, 30))
-            end_date = start_date + timedelta(days=random.randint(60, 300))
-            listings.append(Listing(
-                title=title,
-                description=description,
-                price_per_night=Decimal(str(price)),
-                available_from=start_date,
-                available_to=end_date
-            ))
-        Listing.objects.bulk_create(listings)
-        self.stdout.write(f"Created {len(listings)} listings")
-        return list(Listing.objects.all())
+        for i in range(10):
+            listing = Listing.objects.create(
+                title=f'Cozy Apartment #{i + 1}',
+                description='A nice and cozy place to stay.',
+                price_per_night=random.uniform(50, 200),
+                location='City Center'
+            )
+            listings.append(listing)
 
-    def create_bookings(self, users, listings):
-        self.stdout.write("Creating bookings...")
-        bookings = []
-        for _ in range(4):
-            listing = random.choice(listings)
-            user = random.choice(users)
-            start_date = listing.available_from + timedelta(days=random.randint(0, 30))
-            end_date = start_date + timedelta(days=random.randint(2, 7))
-            if end_date <= listing.available_to:
-                bookings.append(Booking(
+        self.stdout.write('Creating bookings and reviews...')
+        for listing in listings:
+            # Create bookings
+            for j in range(random.randint(1, 5)):
+                Booking.objects.create(
                     listing=listing,
-                    user=user,
-                    start_date=start_date,
-                    end_date=end_date
-                ))
-        Booking.objects.bulk_create(bookings)
-        self.stdout.write(f"Created {len(bookings)} bookings")
+                    user_name=f'User{j + 1}',
+                    check_in=timezone.now().date() + timedelta(days=j * 7),
+                    check_out=timezone.now().date() + timedelta(days=j * 7 + 3)
+                )
+            # Create reviews
+            for k in range(random.randint(1, 3)):
+                Review.objects.create(
+                    listing=listing,
+                    user_name=f'Reviewer{k + 1}',
+                    rating=random.randint(1, 5),
+                    comment='This is a great place!',
+                    created_at=timezone.now()
+                )
 
-    def create_reviews(self, users, listings):
-        self.stdout.write("Creating reviews...")
-        reviews_data = [
-            (5, "Absolutely loved the location and vibe! Will come back."),
-            (4, "Nice and clean place, great communication with the host."),
-            (5, "Perfect weekend getaway spot, highly recommended!"),
-        ]
-        reviews = []
-        for rating, comment in reviews_data:
-            reviews.append(Review(
-                listing=random.choice(listings),
-                user=random.choice(users),
-                rating=rating,
-                comment=comment
-            ))
-        Review.objects.bulk_create(reviews)
-        self.stdout.write(f"Created {len(reviews)} reviews")
-
-    def final_summary(self):
-        self.stdout.write(self.style.SUCCESS(
-            f"\n Seeding complete!\n"
-            f" Users: {User.objects.filter(is_superuser=False).count()}\n"
-            f" Listings: {Listing.objects.count()}\n"
-            f" Bookings: {Booking.objects.count()}\n"
-            f" Reviews: {Review.objects.count()}"
-        ))
+        self.stdout.write(self.style.SUCCESS('Database seeded successfully!'))
